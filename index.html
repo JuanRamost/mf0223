@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="es">
+<head>
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width,initial-scale=1" />
+	<title>Catálogo Técnico - Servidores</title>
+	<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+	<div class="container">
+		<header class="header">
+			<div>
+				<h1 class="title">Catálogo Técnico de Servidores</h1>
+				<p class="subtitle">Gestión de infraestructura mediante MockAPI</p>
+			</div>
+		</header>
+
+		<div id="cards" class="cards">
+			<div id="emptyMsg" class="empty">Cargando servidores...</div>
+		</div>
+
+	<aside class="form-card">
+	<h2>Agregar / Editar Servidor</h2>
+
+	<div class="form-center">
+		<form id="serverForm" class="form">
+
+			<!-- Nombre -->
+			<div>
+				<label for="name">Nombre del Servidor</label>
+				<input
+					type="text"
+					id="name"
+					name="name"
+					class="input"
+					placeholder="Web Server 01"
+					required
+				/>
+			</div>
+
+			<!-- CPU y RAM -->
+			<div class="row">
+
+				<!-- CPU -->
+				<div>
+					<label for="cpu">CPU (cores)</label>
+					<select id="cpu" name="cpu" class="input" required>
+						<option value="2" data-price="50">2 cores – 50$</option>
+						<option value="4" data-price="100">4 cores – 100$</option>
+						<option value="8" data-price="200">8 cores – 200$</option>
+					</select>
+				</div>
+
+				<!-- RAM -->
+				<div>
+					<label for="ram">RAM (GB)</label>
+					<select id="ram" name="ram" class="input" required>
+						<option value="4" data-price="40">4 GB – 40$</option>
+						<option value="8" data-price="80">8 GB – 80$</option>
+						<option value="16" data-price="160">16 GB – 160$</option>
+					</select>
+				</div>
+
+			</div>
+
+			<!-- Almacenamiento -->
+			<div>
+				<label for="storage">Almacenamiento</label>
+				<select id="storage" name="storage" class="input" required>
+					<option value="256" data-price="50">256 GB – 50$</option>
+					<option value="512" data-price="100">512 GB – 100$</option>
+					<option value="1000" data-price="500">2 TB – 500$</option>
+				</select>
+			</div>
+
+			<!-- Botones -->
+			<div style="display:flex;gap:8px;margin-top:4px;">
+				<button type="submit" class="btn">Añadir</button>
+				<button type="reset" class="btn" style="background:#64748b;">Cancelar</button>
+			</div>
+
+		</form>
+	</div>
+</aside>
+
+	</div>
+
+	<script>
+		// Simplified CRUD using MockAPI
+		const API = 'https://694a51251282f890d2d84ac5.mockapi.io/CatalogoTecnico/CatalogoTecnico';
+		const form = document.getElementById('serverForm');
+		const cards = document.getElementById('cards');
+		const emptyMsg = document.getElementById('emptyMsg');
+		const submitBtn = form.querySelector('button[type="submit"]');
+
+		function escapeHtml(s){
+			return String(s)
+				.replace(/&/g, '&amp;')
+				.replace(/</g, '&lt;')
+				.replace(/>/g, '&gt;')
+				.replace(/"/g, '&quot;')
+				.replace(/'/g, '&#39;');
+		}
+
+		let serverSchema = { name:'name', cpu:'cpu', ram:'ram', storage:'storage' };
+
+		// Función para calcular el precio total (usada tanto en validación como en cards)
+		function calculateTotalPrice(cpu, ram, storage) {
+			const cpuPrice = Number(document.querySelector(`#cpu option[value="${cpu}"]`)?.dataset.price) || 0;
+			const ramPrice = Number(document.querySelector(`#ram option[value="${ram}"]`)?.dataset.price) || 0;
+			const storagePrice = Number(document.querySelector(`#storage option[value="${storage}"]`)?.dataset.price) || 0;
+			return cpuPrice + ramPrice + storagePrice;
+		}
+
+		function createCard(data){
+			const totalPrice = calculateTotalPrice(data.cpu, data.ram, data.storage);
+
+			const card = document.createElement('article');
+			card.className = 'card';
+			card.dataset.id = data.id;
+			card.innerHTML = `
+				<div class="name">${escapeHtml(data.name)}</div>
+				<div class="meta">ID: ${data.id}</div>
+				<div class="specs">
+					<div class="kv">CPU: ${data.cpu} cores</div>
+					<div class="kv">RAM: ${data.ram} GB</div>
+					<div class="kv">Almacenamiento: ${escapeHtml(data.storage)}</div>
+					<div class="kv price" style="font-weight: bold; margin-top: 8px; color: #2563eb;">
+						Precio total: ${totalPrice}$
+					</div>
+				</div>
+				<div style="display:flex;gap:8px;margin-top:8px;">
+					<button class="btn edit">Editar</button>
+					<button class="btn del" style="background:#ef4444;">Eliminar</button>
+				</div>
+			`;
+
+			card.querySelector('.edit').addEventListener('click', () => startEdit(data));
+			card.querySelector('.del').addEventListener('click', () => deleteServer(data.id, card));
+			return card;
+		}
+
+		function normalizeRaw(raw){
+			return {
+				id: raw.id,
+				name: raw.name ?? raw.Nombre ?? raw.nombre ?? raw.Name ?? '',
+				cpu: Number(raw.cpu ?? raw.CPU ?? raw.Cpu ?? raw.cores ?? 0),
+				ram: Number(raw.ram ?? raw.RAM ?? raw.Ram ?? raw.memory ?? 0) || (raw.RAM ?? raw.ram ?? raw.RAM),
+				storage: raw.storage ?? raw.Almacenamiento ?? raw.Storage ?? raw.storageType ?? ''
+			};
+		}
+
+		function buildPayload(norm){
+			const out = {};
+			out[serverSchema.name] = norm.name;
+			out[serverSchema.cpu] = norm.cpu;
+			out[serverSchema.ram] = norm.ram;
+			out[serverSchema.storage] = norm.storage;
+			return out;
+		}
+
+		function render(list){
+			cards.innerHTML = '';
+			if(!list || list.length === 0){
+				cards.appendChild(emptyMsg);
+				emptyMsg.style.display = '';
+				return;
+			}
+			emptyMsg.style.display = 'none';
+			list.forEach(s => cards.appendChild(createCard(s)));
+		}
+
+		async function loadServers(){
+			try{
+				const res = await fetch(API);
+				if(!res.ok) throw new Error(res.status + ' ' + res.statusText);
+				const ct = res.headers.get('content-type') || '';
+				if(ct.indexOf('text/html') !== -1){
+					const text = await res.text();
+					console.error('Respuesta HTML detectada desde la URL de la API. Parece la página de documentación de MockAPI.');
+					emptyMsg.textContent = 'Error: la URL configurada devuelve HTML (página de docs). Usa el endpoint JSON de MockAPI (p. ej. busca "Endpoint" en mockapi.io).';
+					cards.appendChild(emptyMsg);
+					return;
+				}
+				const data = await res.json();
+				render(data.map(normalizeRaw));
+			}catch(err){
+				console.error(err);
+				emptyMsg.textContent = 'Error conectando a MockAPI: ' + err.message + ' (URL: ' + API + '). Si ves HTML, copia el endpoint JSON desde MockAPI.';
+				cards.appendChild(emptyMsg);
+			}
+		}
+
+		async function createServer(payload){
+			const serverPayload = buildPayload(payload);
+			const res = await fetch(API, { 
+				method: 'POST', 
+				headers: {'Content-Type':'application/json'}, 
+				body: JSON.stringify(serverPayload) 
+			});
+			if(!res.ok) throw new Error(res.status + ' ' + res.statusText);
+			return await res.json();
+		}
+
+		async function updateServer(id, payload){
+			const serverPayload = buildPayload(payload);
+			const res = await fetch(API + '/' + id, { 
+				method: 'PUT', 
+				headers: {'Content-Type':'application/json'}, 
+				body: JSON.stringify(serverPayload) 
+			});
+			if(!res.ok) throw new Error(res.status + ' ' + res.statusText);
+			return await res.json();
+		}
+
+		async function deleteServer(id,el){
+			if(!confirm('¿Eliminar servidor?')) return;
+			try{
+				const res = await fetch(API + '/' + id, { method: 'DELETE' });
+				if(!res.ok) throw new Error(res.status + ' ' + res.statusText);
+				el.remove();
+				if(cards.querySelectorAll('.card').length === 0){
+					emptyMsg.style.display = '';
+					cards.appendChild(emptyMsg);
+				}
+			}catch(err){ alert('No se pudo eliminar: '+err.message); }
+		}
+
+		function startEdit(s){
+			form.name.value = s.name;
+			form.cpu.value = s.cpu;
+			form.ram.value = s.ram;
+			form.storage.value = s.storage;
+			form.dataset.editId = s.id;
+			submitBtn.textContent = 'Guardar';
+		}
+
+		form.addEventListener('reset', () => { 
+			delete form.dataset.editId; 
+			submitBtn.textContent = 'Añadir'; 
+			document.getElementById('cpu').value = 2; 
+			document.getElementById('ram').value = 4; 
+		});
+
+		form.addEventListener('submit', async (e) =>{
+			e.preventDefault();
+			const fd = new FormData(form);
+			const name = (fd.get('name')||'').trim();
+			const cpu = Number(fd.get('cpu')) || 0;
+			const ram = Number(fd.get('ram')) || 0;
+			const storage = fd.get('storage');
+			
+			if(!name){ alert('Nombre obligatorio'); return; }
+			if(cpu<2){ alert('CPU mínimo 2'); return; }
+			if(ram<4){ alert('RAM mínimo 4GB'); return; }
+			
+			const totalPrice = calculateTotalPrice(cpu, ram, storage);
+			if (totalPrice > 700) {
+				alert(`El presupuesto no puede exceder los 700 $. Configuración actual: ${totalPrice}$`);
+				return;
+			}
+
+			const payload = { name, cpu, ram, storage };
+			
+			try{
+				if(form.dataset.editId){
+					await updateServer(form.dataset.editId, payload);
+					await loadServers();
+					form.reset();
+					submitBtn.textContent = 'Añadir';
+					delete form.dataset.editId;
+				}else{
+					const created = await createServer(payload);
+					cards.appendChild(createCard(normalizeRaw(created)));
+					emptyMsg.style.display = 'none';
+					form.reset(); 
+					document.getElementById('cpu').value = 2; 
+					document.getElementById('ram').value = 4;
+				}
+			}catch(err){ 
+				alert('Error: '+err.message); 
+			}
+		});
+
+		document.addEventListener('DOMContentLoaded', loadServers);
+	</script>
+</body>
+</html>

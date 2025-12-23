@@ -1,0 +1,4 @@
+{
+  "_deprecated": "Este archivo ya no se usa. La aplicación ahora utiliza MockAPI para gestionar los datos.",
+  "servers": []
+}
