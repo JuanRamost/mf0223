@@ -4,4 +4,4 @@ COPY . .
 
 FROM nginx:alpine
 COPY --from=builder /app /usr/share/nginx/html
-COPY default.conf.template /etc/nginx/templates/
+COPY nginx.conf.template /etc/nginx/templates/nginx.conf.template
